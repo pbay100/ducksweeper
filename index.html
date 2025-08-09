@@ -1,326 +1,160 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Duck Dodge</title>
-  <style>
-    :root{
-      --bg:#0b1220; --panel:#0f172a; --text:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --danger:#f43f5e; --ok:#22c55e;
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background:radial-gradient(1200px 700px at -10% -10%, #1a2b4d, transparent), radial-gradient(1000px 600px at 120% 0%, #19233c, transparent), #0b1220; color:var(--text); display:grid; place-items:center;}
-    .card{width:min(100%,900px); background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); border:1px solid rgba(255,255,255,.1); border-radius:16px; padding:14px; box-shadow:0 10px 24px rgba(0,0,0,.35);}
-    header{display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;}
-    .title{display:flex; align-items:center; gap:10px}
-    .title h1{margin:0; font-size:20px}
-    .controls{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
-    button,select{color:var(--text); background:#0f172a; border:1px solid rgba(255,255,255,.16); border-radius:12px; padding:10px 12px; cursor:pointer}
-    button.primary{background:linear-gradient(180deg, #1f6feb, #1b4fd6); border-color:#1b4fd6}
-    .stats{display:flex; gap:10px; flex-wrap:wrap}
-    .stat{background:#0f172a; border:1px solid rgba(255,255,255,.16); padding:8px 12px; border-radius:12px; font-variant-numeric:tabular-nums}
-    .label{font-size:11px;color:var(--muted); text-transform:uppercase; letter-spacing:.14em}
-    .value{display:block; font-size:18px; font-weight:700}
-
-    .canvas-wrap{position:relative; margin-top:10px; border-radius:14px; overflow:hidden;}
-    canvas{width:100%; height:auto; display:block; background:linear-gradient(#6fd0ff, #a2e5ff 70%, #8ad07c); border-radius:12px}
-
-    .footer{margin-top:6px; font-size:12px; color:var(--muted); display:flex; justify-content:space-between; align-items:center}
-
-    /* Touch controls (optional) */
-    .touch-controls{display:none; gap:8px; margin-top:8px}
-    .touch-controls button{width:64px; height:48px; border-radius:10px}
-    @media (max-width:700px){ .touch-controls{display:flex; justify-content:center} }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duck Dodge — Eggs!</title>
+<style>
+  html,body {height:100%;margin:0;background:#0e1a2b;color:#e9eef7;font-family:system-ui,Arial}
+  .wrap {display:grid;place-items:center;height:100%}
+  canvas {background:linear-gradient(#77c0ff,#cbe9ff 60%, #5fb057 60%, #4aa547 100%);
+          border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .hud {position:fixed; top:12px; left:50%; transform:translateX(-50%);
+        background:#0b1322cc; border:1px solid #2e3d58; padding:6px 10px; border-radius:10px;
+        font-variant-numeric:tabular-nums}
+  .hint {position:fixed; bottom:14px; left:50%; transform:translateX(-50%); 
+         background:#0b1322cc; border:1px solid #2e3d58; padding:6px 10px; border-radius:10px; font-size:12px}
+</style>
 </head>
 <body>
-  <div class="card">
-    <header>
-      <div class="title">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 18c0-3 3-6 9-6s9 3 9 6H3z" fill="#fbbf24"/><circle cx="9" cy="8" r="3" fill="#fde68a"/><path d="M12 6c3 0 5 2 6 3.5S19.5 13 18 13c-2 0-4-1-6-4V6z" fill="#22c55e"/></svg>
-        <h1>Duck Dodge</h1>
-      </div>
-      <div class="controls">
-        <button id="btnStart" class="primary">Start</button>
-        <select id="difficulty" title="Difficulty">
-          <option value="easy">Easy</option>
-          <option value="normal" selected>Normal</option>
-          <option value="hard">Hard</option>
-          <option value="insane">Insane</option>
-        </select>
-        <div class="stats">
-          <div class="stat"><span class="label">Score</span><span id="score" class="value">0</span></div>
-          <div class="stat"><span class="label">Lives</span><span id="lives" class="value">3</span></div>
-        </div>
-      </div>
-    </header>
+<div class="wrap">
+  <canvas id="game" width="520" height="360"></canvas>
+</div>
+<div class="hud">Score: <span id="sc">0</span> · Misses: <span id="ms">0</span></div>
+<div class="hint">← → to move · R to restart</div>
 
-    <div class="canvas-wrap">
-      <canvas id="game" width="900" height="540" aria-label="Duck Dodge game"></canvas>
-    </div>
+<script>
+const c = document.getElementById('game');
+const ctx = c.getContext('2d');
+const W=c.width, H=c.height;
 
-    <div class="touch-controls" aria-hidden="false">
-      <button id="left">◀︎</button>
-      <button id="up">▲</button>
-      <button id="down">▼</button>
-      <button id="right">▶︎</button>
-    </div>
+const duck = { x: W/2, y: H-52, w: 46, h: 34, speed: 240, sadUntil: 0 };
+let eggs = [];
+let last = 0, acc = 0;
+let score = 0, misses = 0, running = true;
+const scEl = document.getElementById('sc'), msEl = document.getElementById('ms');
 
-    <div class="footer">
-      <div>Use the arrow keys to move the duck 
-        <span aria-hidden="true">⬅️⬆️⬇️➡️</span>
-      </div>
-      <div>Avoid the falling eggs! 🥚</div>
-    </div>
-  </div>
+const keys = {};
+addEventListener('keydown', e => { keys[e.key] = true; if (e.key.toLowerCase()==='r') reset(); });
+addEventListener('keyup',   e => { keys[e.key] = false; });
 
-  <script>
-  (()=>{
-    const canvas = document.getElementById('game');
-    const ctx = canvas.getContext('2d');
-    const startBtn = document.getElementById('btnStart');
-    const diffEl = document.getElementById('difficulty');
-    const scoreEl = document.getElementById('score');
-    const livesEl = document.getElementById('lives');
+function reset(){
+  eggs = []; score = 0; misses = 0; running = true; duck.sadUntil = 0;
+  scEl.textContent = score; msEl.textContent = misses;
+}
 
-    // Touch buttons
-    const btnL = document.getElementById('left');
-    const btnR = document.getElementById('right');
-    const btnU = document.getElementById('up');
-    const btnD = document.getElementById('down');
+function spawnEgg(){
+  const x = 20 + Math.random()*(W-40);
+  eggs.push({ x, y:-20, vy: 90+Math.random()*110, r:10, state:'fall' }); // state: fall|broken
+}
 
-    const W = canvas.width; const H = canvas.height;
-
-    const DIFFS = {
-      easy:   {gravity: 2.2, spawn: 900, speed: 5, eggsPerWave:[1,1]},
-      normal: {gravity: 3.0, spawn: 750, speed: 6, eggsPerWave:[1,2]},
-      hard:   {gravity: 3.8, spawn: 600, speed: 7, eggsPerWave:[2,3]},
-      insane: {gravity: 4.6, spawn: 450, speed: 8, eggsPerWave:[3,4]},
-    };
-
-    let player, eggs, keys, lastSpawn, running, score, lives, diff;
-    let lastTime=0, eggId=0;
-
-    function reset(){
-      diff = DIFFS[diffEl.value] || DIFFS.normal;
-      player = { x: W*0.5, y: H-90, w: 80, h: 60, vx:0, vy:0, speed: diff.speed };
-      eggs = [];
-      keys = {left:false, right:false, up:false, down:false};
-      lastSpawn = 0; running=false; score=0; lives=3; eggId=0; updateHUD();
-      drawSplash();
-    }
-
-    function start(){ running=true; lastTime=performance.now(); requestAnimationFrame(tick); }
-
-    function updateHUD(){ scoreEl.textContent=score; livesEl.textContent=lives; }
-
-    function drawSplash(){
-      ctx.clearRect(0,0,W,H);
-      drawBackground();
-      drawDuck(player);
-      ctx.fillStyle='rgba(0,0,0,.45)';
-      ctx.fillRect(0,0,W,H);
-      ctx.fillStyle='#fff';
-      ctx.textAlign='center';
-      ctx.font='bold 42px ui-sans-serif, system-ui, -apple-system';
-      ctx.fillText('Duck Dodge', W/2, H/2-10);
-      ctx.font='18px ui-sans-serif, system-ui, -apple-system';
-      ctx.fillText('Avoid the falling eggs. Arrow keys to move. Press Start to play!', W/2, H/2+26);
-    }
-
-    function drawBackground(){
-      // sky
-      const sky = ctx.createLinearGradient(0,0,0,H);
-      sky.addColorStop(0,'#6fd0ff'); sky.addColorStop(.7,'#a2e5ff'); sky.addColorStop(1,'#8ad07c');
-      ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
-      // ground
-      ctx.fillStyle='#6fbf5e'; ctx.fillRect(0,H-80,W,80);
-      // water/pond
-      ctx.fillStyle='rgba(255,255,255,.25)';
-      ctx.beginPath(); ctx.ellipse(W*0.3,H-40,120,20,0,0,Math.PI*2); ctx.fill();
-      // clouds
-      drawCloud(140,90,1.0); drawCloud(360,60,0.8); drawCloud(680,110,1.2);
-    }
-
-    function drawCloud(x,y,s){
-      ctx.fillStyle='rgba(255,255,255,.9)';
-      ctx.beginPath();
-      ctx.ellipse(x,y,28*s,18*s,0,0,Math.PI*2);
-      ctx.ellipse(x+30*s,y+6*s,26*s,16*s,0,0,Math.PI*2);
-      ctx.ellipse(x-26*s,y+10*s,22*s,14*s,0,0,Math.PI*2);
-      ctx.fill();
-    }
-
-    function drawDuck(d){
-      // simple cartoon duck, body + head + beak + eye + feet
-      // shadow
-      ctx.fillStyle='rgba(0,0,0,.2)'; ctx.beginPath(); ctx.ellipse(d.x,d.y+d.h-10,28,8,0,0,Math.PI*2); ctx.fill();
-      // body
-      ctx.fillStyle='#facc15'; // yellow
-      ctx.beginPath(); ctx.ellipse(d.x,d.y,34,22,0,0,Math.PI*2); ctx.fill();
-      // wing
-      ctx.fillStyle='#fbbf24'; ctx.beginPath(); ctx.ellipse(d.x-6,d.y,16,12,0,0,Math.PI*2); ctx.fill();
-      // head
-      ctx.fillStyle='#fde047'; ctx.beginPath(); ctx.ellipse(d.x+24,d.y-16,16,14,0,0,Math.PI*2); ctx.fill();
-      // beak (fixed syntax: '=' instead of ':')
-      ctx.fillStyle = '#f97316'; ctx.beginPath(); ctx.ellipse(d.x+38,d.y-10,10,6,0,0,Math.PI*2); ctx.fill();
-      // eye
-      ctx.fillStyle='#111827'; ctx.beginPath(); ctx.arc(d.x+28,d.y-18,2.6,0,Math.PI*2); ctx.fill();
-      // feet
-      ctx.fillStyle='#fb923c';
-      ctx.fillRect(d.x-10,d.y+16,10,6); ctx.fillRect(d.x+2,d.y+16,10,6);
-    }
-
-    function spawnEggs(dt){
-      lastSpawn += dt;
-      if(lastSpawn >= diff.spawn){
-        lastSpawn = 0;
-        const count = randInt(diff.eggsPerWave[0], diff.eggsPerWave[1]);
-        for(let i=0;i<count;i++){
-          const x = randInt(20, W-20);
-          const size = randInt(14, 24);
-          eggs.push({ id: ++eggId, x, y: -30, r: size, vy: diff.gravity + Math.random()*1.2});
-        }
+function update(dt){
+  if (!running) return;
+  // duck move
+  if (keys['ArrowLeft']) duck.x -= duck.speed*dt;
+  if (keys['ArrowRight']) duck.x += duck.speed*dt;
+  duck.x = Math.max(duck.w/2, Math.min(W-duck.w/2, duck.x));
+  // spawn eggs
+  if (Math.random() < 0.02 + score*0.0005) spawnEgg();
+  // eggs physics
+  for (const e of eggs){
+    if (e.state==='fall'){
+      e.y += e.vy*dt;
+      // collide with duck (AABB-circle quick check)
+      const dx = Math.max(Math.abs(e.x - duck.x) - duck.w/2, 0);
+      const dy = Math.max(Math.abs(e.y - duck.y) - duck.h/2, 0);
+      const dist2 = dx*dx + dy*dy;
+      if (dist2 <= e.r*e.r){
+        e.state='broken'; e.vy=0; // break egg
+        duck.sadUntil = performance.now()+900; // duck sad for 0.9s
+        score = Math.max(0, score-1);
+        scEl.textContent = score;
       }
     }
+  }
+  // remove / count misses
+  eggs = eggs.filter(e=>{
+    if (e.y > H+30 && e.state==='fall'){ misses++; msEl.textContent=misses; return false; }
+    return true;
+  });
+}
 
-    function drawEgg(e){
-      // egg shape
-      ctx.save();
-      ctx.translate(e.x, e.y);
-      ctx.scale(1,1.2);
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  drawDuck();
+  drawEggs();
+}
+
+function drawDuck(){
+  const sad = performance.now() < duck.sadUntil;
+  // body
+  ctx.save();
+  ctx.translate(duck.x, duck.y);
+  // belly
+  ctx.fillStyle = '#ffd54a';
+  roundRect(-duck.w/2, -duck.h/2, duck.w, duck.h, 10);
+  ctx.fill();
+  // head
+  ctx.beginPath();
+  ctx.arc(duck.w*0.22, -duck.h*0.25, 12, 0, Math.PI*2);
+  ctx.fillStyle = '#ffe071'; ctx.fill();
+  // beak
+  ctx.fillStyle = '#ff9f43';
+  ctx.fillRect(duck.w*0.32, -duck.h*0.28, 14, 7);
+  // eye
+  ctx.fillStyle = '#0b1322';
+  if (sad){
+    // sad eye (angled line)
+    ctx.save(); ctx.translate(duck.w*0.18, -duck.h*0.30); ctx.rotate(-0.6);
+    ctx.fillRect(0,0,10,2); ctx.restore();
+  } else {
+    ctx.beginPath(); ctx.arc(duck.w*0.18, -duck.h*0.30, 2.2, 0, Math.PI*2); ctx.fill();
+  }
+  // tear when sad
+  if (sad){ ctx.fillStyle='#7ad3ff'; ctx.beginPath(); ctx.arc(duck.w*0.16, -duck.h*0.18, 3, 0, Math.PI*2); ctx.fill(); }
+  ctx.restore();
+}
+
+function drawEggs(){
+  for (const e of eggs){
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    if (e.state==='fall'){
+      // whole egg
+      ctx.fillStyle='#fffaf0'; drawEggShape(ctx,0,0,12,16); ctx.fill();
+      ctx.strokeStyle='#e9e2d4'; ctx.stroke();
+    } else {
+      // broken egg: two halves + goo
       ctx.fillStyle='#fffaf0';
-      ctx.beginPath(); ctx.ellipse(0,0,e.r, e.r*1.2, 0, 0, Math.PI*2); ctx.fill();
-      // shine
-      ctx.fillStyle='rgba(255,255,255,.6)';
-      ctx.beginPath(); ctx.ellipse(-e.r*0.3,-e.r*0.2, e.r*0.25, e.r*0.18, 0,0,Math.PI*2); ctx.fill();
-      ctx.restore();
+      drawEggShape(ctx,-8,0,8,10); ctx.fill();
+      drawEggShape(ctx, 8,0,8,10); ctx.fill();
+      ctx.fillStyle='#ffe17a';
+      ctx.beginPath(); ctx.arc(0,8,6,0,Math.PI*2); ctx.fill();
     }
+    ctx.restore();
+  }
+}
 
-    function update(dt){
-      // movement
-      player.vx = (keys.left?-1:0 + keys.right?1:0); // wrong precedence? handle below
-      // correct movement handling
-      let vx=0, vy=0; if(keys.left) vx-=1; if(keys.right) vx+=1; if(keys.up) vy-=1; if(keys.down) vy+=1;
-      const len=Math.hypot(vx,vy) || 1; vx/=len; vy/=len;
-      player.x += vx*player.speed* (dt/16.6667) * 6; // normalize to 60fps
-      player.y += vy*player.speed* (dt/16.6667) * 6;
-      // bounds
-      player.x = Math.max(40, Math.min(W-40, player.x));
-      player.y = Math.max(120, Math.min(H-90, player.y));
+function drawEggShape(ctx,x,y,rx,ry){
+  ctx.beginPath();
+  ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);
+}
 
-      // eggs
-      for(let i=eggs.length-1;i>=0;i--){
-        const e = eggs[i];
-        e.y += e.vy * (dt/16.6667) * 6;
-        // collision (approx as circle vs duck ellipse)
-        const dx = Math.abs(e.x - player.x);
-        const dy = Math.abs(e.y - player.y);
-        if(dx < e.r+26 && dy < e.r+18){
-          // hit!
-          eggs.splice(i,1); lives--; flash('#f43f5e'); updateHUD();
-          if(lives<=0){ gameOver(); return; }
-        } else if(e.y - e.r > H){
-          // safely avoided
-          eggs.splice(i,1); score+=10; updateHUD();
-        }
-      }
+function roundRect(x,y,w,h,r){ ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); }
 
-      // escalate difficulty slowly
-      if(score>0 && score % 100 === 0){ diff.spawn = Math.max(300, diff.spawn-2); }
-    }
-
-    function render(){
-      drawBackground();
-      // eggs
-      for(const e of eggs){ drawEgg(e); }
-      // player
-      drawDuck(player);
-      // HUD overlay
-      ctx.fillStyle='rgba(0,0,0,.25)'; ctx.fillRect(0,0,W,36);
-      ctx.fillStyle='#fff'; ctx.font='bold 16px ui-sans-serif, system-ui'; ctx.textAlign='left';
-      ctx.fillText('Score: '+score, 14, 22);
-      ctx.textAlign='center'; ctx.fillText('Avoid the falling eggs', W/2, 22);
-      ctx.textAlign='right'; ctx.fillText('Lives: '+lives, W-14, 22);
-    }
-
-    function tick(now){
-      if(!running) return; 
-      const dt = Math.min(100, now - lastTime); lastTime = now;
-      spawnEggs(dt); update(dt); render();
-      requestAnimationFrame(tick);
-    }
-
-    function gameOver(){
-      running=false;
-      // dim screen
-      ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,W,H);
-      ctx.fillStyle='#fff'; ctx.textAlign='center';
-      ctx.font='bold 40px ui-sans-serif, system-ui'; ctx.fillText('Game Over', W/2, H/2-10);
-      ctx.font='18px ui-sans-serif, system-ui'; ctx.fillText('Score: '+score+'  •  Press Start to try again', W/2, H/2+24);
-    }
-
-    function flash(color){
-      // quick flash overlay to indicate hit
-      ctx.save();
-      ctx.fillStyle=color; ctx.globalAlpha=0.35; ctx.fillRect(0,0,W,H);
-      ctx.restore();
-    }
-
-    // helpers
-    function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
-
-    // simple runtime smoke tests (non-intrusive, console-only)
-    function runSelfTests(){
-      try{
-        console.assert(!!DIFFS.easy && !!DIFFS.normal && !!DIFFS.hard && !!DIFFS.insane, 'Difficulties exist');
-        for(let i=0;i<10;i++){ const r=randInt(1,3); console.assert(r>=1 && r<=3, 'randInt bounds'); }
-        const savedEggs = eggs.slice(); const savedSpawn = lastSpawn; spawnEggs(5000);
-        console.assert(eggs.length>=1, 'spawnEggs creates eggs with large dt');
-        eggs = savedEggs; lastSpawn = savedSpawn; // restore
-        const savedPlayer = {...player}; player.x=-999; player.y=99999; update(0);
-        console.assert(player.x>=40 && player.x<=W-40 && player.y>=120 && player.y<=H-90, 'Player clamp within bounds');
-        Object.assign(player, savedPlayer); // restore
-        console.log('Duck Dodge: self-tests passed');
-      }catch(err){
-        console.error('Duck Dodge: self-tests failed', err);
-      }
-    }
-
-    // input
-    window.addEventListener('keydown', (e)=>{
-      if(e.key==='ArrowLeft') keys.left=true;
-      else if(e.key==='ArrowRight') keys.right=true;
-      else if(e.key==='ArrowUp') keys.up=true;
-      else if(e.key==='ArrowDown') keys.down=true;
-    });
-    window.addEventListener('keyup', (e)=>{
-      if(e.key==='ArrowLeft') keys.left=false;
-      else if(e.key==='ArrowRight') keys.right=false;
-      else if(e.key==='ArrowUp') keys.up=false;
-      else if(e.key==='ArrowDown') keys.down=false;
-    });
-
-    // touch controls
-    function bindHold(btn, key){
-      let t; const on=()=>{ keys[key]=true; }; const off=()=>{ keys[key]=false; };
-      btn.addEventListener('touchstart', (e)=>{ e.preventDefault(); on(); });
-      btn.addEventListener('touchend', off);
-      btn.addEventListener('mousedown', (e)=>{ e.preventDefault(); on(); });
-      btn.addEventListener('mouseup', off);
-      btn.addEventListener('mouseleave', off);
-    }
-    bindHold(btnL,'left'); bindHold(btnR,'right'); bindHold(btnU,'up'); bindHold(btnD,'down');
-
-    // UI
-    startBtn.addEventListener('click', ()=>{ reset(); start(); });
-    diffEl.addEventListener('change', reset);
-
-    // boot
-    reset();
-    runSelfTests();
-  })();
-  </script>
+function loop(ts){
+  if (!last) last = ts;
+  const dt = Math.min((ts-last)/1000, 0.033);
+  last = ts; acc += dt;
+  while (acc > 0) { update(1/60); acc -= 1/60; }
+  draw();
+  requestAnimationFrame(loop);
+}
+reset(); requestAnimationFrame(loop);
+</script>
 </body>
 </html>
